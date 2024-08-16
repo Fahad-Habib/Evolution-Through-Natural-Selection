@@ -21,6 +21,10 @@ from math import ceil
 from time import sleep
 from threading import Thread
 
+from brain import Brain
+
+
+SELECTION_CRITERIA = 'right_half'
 
 GRID_WIDTH, GRID_HEIGHT = 800, 800
 GRID_POS = 60
@@ -33,12 +37,70 @@ SPEED = 1
 STEPS_GEN = 200
 SIZE = GRID_WIDTH // CELL
 SIZE_ = SIZE - 2  # Reduce 1 from both ends due to grid border
+FACTOR = 2
 
 GRID = [
     [
         0 for _ in range(SIZE)
     ] for _ in range(SIZE)
 ]
+
+class SelectionCriteria:
+    """
+    Selection Criterias.
+    """
+    
+    def __init__(self, criteria):
+        self.criteria = criteria
+
+    def __call__(self, cell):
+        """
+        Dynamically call the specified criteria method.
+        """
+        return eval(f"self.{self.criteria}(cell)")
+
+    def left_half(self, cell):
+        """
+        Selection criteria for the left half of the area.
+        """
+        return cell.x <= SIZE // FACTOR
+
+    def right_half(self, cell):
+        """
+        Selection criteria for the right half of the area.
+        """
+        return cell.x >= (FACTOR-1) * (SIZE // FACTOR)
+
+    def lower_half(self, cell):
+        """
+        Selection criteria for the lower half of the area.
+        """
+        return cell.y <= SIZE // FACTOR
+
+    def upper_half(self, cell):
+        """
+        Selection criteria for the upper half of the area.
+        """
+        return cell.y >= (FACTOR-1) * (SIZE // FACTOR)
+
+    # def corners(self, cell):
+    #     """Selection criteria for the corners."""
+    #     return (cell.x <= CORNER and cell.y <= CORNER) or \
+    #                (cell.x >= SIZE - CORNER - 4 and cell.y <= CORNER) or \
+    #                (cell.x <= CORNER and cell.y >= SIZE - CORNER - 4) or \
+    #                (cell.x >= SIZE - CORNER - 4 and cell.y >= SIZE - CORNER - 4)
+
+    def vertical_borders(self, cell):
+        """
+        Selection criteria for the area close to vertical boundaries.
+        """
+        return cell.x <= SIZE // FACTOR or cell.x >= (FACTOR-1) * (SIZE // FACTOR)
+
+    def horizontal_borders(self, cell):
+        """
+        Selection criteria for the area close to horizontal boundaries.
+        x"""
+        return cell.y <= SIZE // FACTOR or cell.y >= (FACTOR-1) * (SIZE // FACTOR)
 
 
 class Cell:
@@ -47,7 +109,7 @@ class Cell:
     """
 
     def __init__(self, parent, genome):
-        # self.brain = Brain()
+        self.brain = Brain()
         
         self.action_outputs = {
             'Mr': (1, 0), 
@@ -64,7 +126,9 @@ class Cell:
         self.update()
 
     def move_step(self):
-        """Move one step on the grid according to the brain's output signal."""
+        """
+        Move one step on the grid according to the brain's output signal.
+        """
         BDs = [
             1 - (self.x / SIZE_), 
             self.x / SIZE_, 
@@ -80,20 +144,18 @@ class Cell:
             *BDs
         ]
 
-        # self.brain.process(sensory_inputs)
+        self.brain.process(sensory_inputs)
         
-        # out = choices(
-        #     ['Mrand', 'Mr', 'Ml', 'Mu', 'Md'],
-        #     weights = self.brain.action_outputs, 
-        #     k = 1
-        # )[0]
+        out = choices(
+            ['Mrand', 'Mr', 'Ml', 'Mu', 'Md'],
+            weights = self.brain.action_outputs, 
+            k = 1
+        )[0]
         
-        # if out == 'Mrand':
-        #     out = (randint(-1, 1), randint(-1, 1))
-        # else:
-        #     out = self.action_outputs[out]
-
-        out = (randint(-1, 1), randint(-1, 1))
+        if out == 'Mrand':
+            out = (randint(-1, 1), randint(-1, 1))
+        else:
+            out = self.action_outputs[out]
 
         x = self.x + SPEED * out[0]
         y = self.y + SPEED * out[1]
@@ -138,7 +200,7 @@ class Cell:
         """
         self.age = 0
         self.genome = genome
-        # self.brain.wire_up(genome)
+        self.brain.wire_up(genome)
 
         self.assign_random_color()
 
@@ -186,6 +248,23 @@ class MainWindow(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        self.gen = 0
+        self.criteria = SELECTION_CRITERIA
+        self.selection_criteria = SelectionCriteria(self.criteria)
+
+        self.boundaries = {
+            'left_half':    (GRID_POS - 10, GRID_POS - 10),
+            'right_half':   (GRID_POS + (FACTOR-1) * (GRID_WIDTH // FACTOR), GRID_POS - 10),
+            'lower_half':   (GRID_POS - 10, GRID_POS - 10),
+            'upper_half':   (GRID_POS - 10, GRID_POS + (FACTOR-1) * (GRID_HEIGHT // FACTOR)),
+        }
+        self.boundary_sizes = {
+            'left_half':    (GRID_WIDTH // FACTOR + 10, GRID_HEIGHT + 20),
+            'right_half':   (GRID_WIDTH // FACTOR + 10, GRID_HEIGHT + 20),
+            'lower_half':   (GRID_WIDTH + 20, GRID_HEIGHT // FACTOR + 10),
+            'upper_half':   (GRID_WIDTH + 20, GRID_HEIGHT // FACTOR + 10),
+        }
+
         with self.canvas.before:
             Color(1, 1, 1, 1)
             self.grid = Rectangle(size=(GRID_WIDTH, GRID_HEIGHT), pos=(GRID_POS, GRID_POS))
@@ -194,7 +273,38 @@ class MainWindow(Screen):
             Color(0, 0, 0, 1)
             self.grid_border = Line(width=2.5, rectangle=(GRID_POS, GRID_POS, GRID_WIDTH, GRID_HEIGHT))
 
-        self.gen = 0
+        with self.canvas.after:
+            self.boundary_color = Color(0, 0, 0, 0)
+            if self.criteria in self.boundaries:
+                Line(width=2.5, rectangle=(*self.boundaries[self.criteria], *self.boundary_sizes[self.criteria]))
+            elif self.criteria == 'vertical_borders':
+                Line(width=2.5, rectangle=(*self.boundaries['left_half'], *self.boundary_sizes['left_half']))
+                Line(width=2.5, rectangle=(*self.boundaries['right_half'], *self.boundary_sizes['right_half']))
+            elif self.criteria == 'horizontal_borders':
+                Line(width=2.5, rectangle=(*self.boundaries['upper_half'], *self.boundary_sizes['upper_half']))
+                Line(width=2.5, rectangle=(*self.boundaries['lower_half'], *self.boundary_sizes['lower_half']))
+            # elif self.criteria == 'corners':
+            #     Line(points=[C_start, C_start, C_start + (5 * CORNER) + 10, C_start, C_start, C_start + (5 * CORNER) + 10], width=2.5, close=True)
+            #     Line(points=[C_top, C_top, C_top, C_top - (5 * CORNER) - 10, C_top - (5 * CORNER) - 10, C_top], width=2.5, close=True)
+            #     Line(points=[C_start, C_top, C_start, C_top - (5 * CORNER) - 10, C_start + (5 * CORNER) + 10, C_top], width=2.5, close=True)
+            #     Line(points=[C_top - (5 * CORNER) - 10, C_start, C_top, C_start, C_top, C_start + (5 * CORNER) + 10], width=2.5, close=True)
+
+        with self.canvas.after:
+            self.boundary_fill = Color(0, 0, 0, 0)
+            if self.criteria in self.boundaries:
+                Rectangle(pos=self.boundaries[self.criteria], size=self.boundary_sizes[self.criteria])
+            elif self.criteria == 'vertical_borders':
+                Rectangle(pos=self.boundaries['left_half'], size=self.boundary_sizes['left_half'])
+                Rectangle(pos=self.boundaries['right_half'], size=self.boundary_sizes['right_half'])
+            elif self.criteria == 'horizontal_borders':
+                Rectangle(pos=self.boundaries['upper_half'], size=self.boundary_sizes['upper_half'])
+                Rectangle(pos=self.boundaries['lower_half'], size=self.boundary_sizes['lower_half'])
+            # elif self.criteria == 'corners':
+            #     Triangle(points=[C_start, C_start, C_start + (5 * CORNER) + 10, C_start, C_start, C_start + (5 * CORNER) + 10], width=2.5, close=True)
+            #     Triangle(points=[C_top, C_top, C_top, C_top - (5 * CORNER) - 10, C_top - (5 * CORNER) - 10, C_top], width=2.5, close=True)
+            #     Triangle(points=[C_start, C_top, C_start, C_top - (5 * CORNER) - 10, C_start + (5 * CORNER) + 10, C_top], width=2.5, close=True)
+            #     Triangle(points=[C_top - (5 * CORNER) - 10, C_start, C_top, C_start, C_top, C_start + (5 * CORNER) + 10], width=2.5, close=True)                
+
         self.genomes = [
             [
                 format(randint(0, (16**8)-1), '08x') for _ in range(GENOME_LENGTH)
@@ -256,30 +366,37 @@ class MainWindow(Screen):
                 cell.update()
             sleep(0.00001)
 
-        # self.update()
+        self.update()
 
     def update(self):
         """
         Update the survival rate.
         """
-        # survivors = []
-        # for cell in self.cells:
-        #     if self.selection_criteria(cell):
-        #         survivors.append(cell.genome)
+        survivors = []
+        for cell in self.cells:
+            if self.selection_criteria(cell):
+                survivors.append(cell.genome)
         
-        # rate = int((len(survivors) / POPULATION) * 100)
+        rate = int((len(survivors) / POPULATION) * 100)
+        print(rate)
         # self.survive_label.text = f'Survival Rate: {rate}%'
-        # self.boundary_color.rgba = (0, 1, 0, 1)
-        # self.boundary_fill.rgba = (0, 1, 0, 0.2)
+        self.change_boundary_fill_color(
+            (0, 1, 0, 1), 
+            (0, 1, 0, 0.2)
+        )
         self.next_gen.disabled = False
 
     def get_next_gen(self, *args):
-        """Get the next generation and update the labels."""
+        """
+        Get the next generation and update the labels.
+        """
         self.gen += 1
         self.label.text = f'Gen {self.gen}'
         self.survive_label.text = ''
-        # self.boundary_color.rgba = (0, 0, 0, 0)
-        # self.boundary_fill.rgba = (0, 0, 0, 0)
+        self.change_boundary_fill_color(
+            (0, 0, 0, 0), 
+            (0, 0, 0, 0)
+        )
 
         for i in range(SIZE):
             for j in range(SIZE):
@@ -311,7 +428,6 @@ class MainWindow(Screen):
         """
         Take the survivors and reproduce the children for the next generation.
         """
-        return
         self.survivors = []
         for cell in self.cells:
             if self.selection_criteria(cell):
@@ -332,6 +448,10 @@ class MainWindow(Screen):
         for genome, cell in zip(self.children_, self.cells):
             cell.reset(genome)
 
+    @mainthread
+    def change_boundary_fill_color(self, color1, color2):
+        self.boundary_color.rgba = color1
+        self.boundary_fill.rgba = color2
 
 class ScreenManagement(ScreenManager):
     """
