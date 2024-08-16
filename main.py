@@ -1,6 +1,6 @@
 from kivy.config import Config
 
-WIDTH, HEIGHT = 830, 480  # 1680, 960
+WIDTH, HEIGHT = 1680, 960  # Adjust according to your screen 
 
 Config.set('graphics', 'resizable', False)
 Config.set('graphics', 'width', WIDTH)
@@ -24,7 +24,7 @@ from threading import Thread
 from brain import Brain
 
 
-SELECTION_CRITERIA = 'right_half'
+SELECTION_CRITERIA = 'left_half'  # Change the selection criteria
 
 GRID_WIDTH, GRID_HEIGHT = 800, 800
 GRID_POS = 60
@@ -37,7 +37,7 @@ SPEED = 1
 STEPS_GEN = 200
 SIZE = GRID_WIDTH // CELL
 SIZE_ = SIZE - 2  # Reduce 1 from both ends due to grid border
-FACTOR = 2
+FACTOR = 4
 
 GRID = [
     [
@@ -378,8 +378,7 @@ class MainWindow(Screen):
                 survivors.append(cell.genome)
         
         rate = int((len(survivors) / POPULATION) * 100)
-        print(rate)
-        # self.survive_label.text = f'Survival Rate: {rate}%'
+        self.update_survival_rate(rate)
         self.change_boundary_fill_color(
             (0, 1, 0, 1), 
             (0, 1, 0, 0.2)
@@ -391,8 +390,9 @@ class MainWindow(Screen):
         Get the next generation and update the labels.
         """
         self.gen += 1
-        self.label.text = f'Gen {self.gen}'
-        self.survive_label.text = ''
+        
+        self.update_update()
+
         self.change_boundary_fill_color(
             (0, 0, 0, 0), 
             (0, 0, 0, 0)
@@ -463,6 +463,15 @@ class MainWindow(Screen):
     def change_boundary_fill_color(self, color1, color2):
         self.boundary_color.rgba = color1
         self.boundary_fill.rgba = color2
+
+    @mainthread
+    def update_update(self):
+        self.label.text = f'Gen {self.gen}'
+        self.survive_label.text = ''
+
+    @mainthread
+    def update_survival_rate(self, rate):
+        self.survive_label.text = f'Survival Rate: {rate}%'
 
 class ScreenManagement(ScreenManager):
     """
