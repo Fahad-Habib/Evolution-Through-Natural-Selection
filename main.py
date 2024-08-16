@@ -329,7 +329,7 @@ class MainWindow(Screen):
         self.simulate.bind(on_release=self.simulate_current)
         self.next_gen.bind(on_release=self.get_next_gen)
         self.skip_next_gen.bind(on_release=self.skip_to_next_gen)
-        # self.skip_next_gen_10.bind(on_release=self.skip_to_next_n_gen)
+        self.skip_next_gen_10.bind(on_release=self.skip_to_next_n_gen)
 
         self.add_widget(self.label)
         self.add_widget(self.size_label)
@@ -411,6 +411,7 @@ class MainWindow(Screen):
         # self.diverse_label.text = 'Genetic Diversity: {:.2f}'.format(self.calculate_diversity(pool))
 
         self.simulate.disabled = False
+        self.next_gen.disabled = True
         self.skip_next_gen.disabled = False
         self.skip_next_gen_10.disabled = False
 
@@ -423,6 +424,16 @@ class MainWindow(Screen):
                 cell.move_step()
 
         self.get_next_gen()
+
+
+    def skip_to_next_n_gen(self, *args):
+        """
+        Skip to the next 'n' generations without the simulation.
+        """
+        n = int(args[0].text.split()[-2])
+        for _ in range(n):
+            self.skip_to_next_gen()
+            print("[GENERATION]", self.gen)
 
     def reproduce(self):
         """
